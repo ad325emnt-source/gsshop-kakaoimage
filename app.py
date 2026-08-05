@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import io
 import json
+import os
 
 # ==========================================
 # 1. Streamlit Page Configuration & Theme
@@ -30,10 +31,57 @@ st.markdown("""
         background-color: #ebd400 !important;
         color: #191919 !important;
     }
+    .sec-badge {
+        background-color: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        font-size: 0.85rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 API_ENDPOINT = "https://cuyr21hbxd.execute-api.ap-northeast-2.amazonaws.com/prod/61258/moment-creative-info"
+
+# ==========================================
+# 2. Automated Secrets & Key Security Logic
+# ==========================================
+def get_api_key():
+    # 1. Check Streamlit Secrets (st.secrets["X_API_KEY"] or st.secrets["x_api_key"])
+    try:
+        if "X_API_KEY" in st.secrets:
+            return st.secrets["X_API_KEY"]
+        if "x_api_key" in st.secrets:
+            return st.secrets["x_api_key"]
+    except Exception:
+        pass
+    
+    # 2. Check Environment Variables
+    env_key = os.getenv("X_API_KEY") or os.getenv("x_api_key")
+    if env_key:
+        return env_key
+    
+    return None
+
+api_key = get_api_key()
+
+# Sidebar Config
+st.sidebar.header("⚙️ 보안 및 인증 설정")
+
+if api_key:
+    st.sidebar.markdown('<div class="sec-badge">🔒 API Key 보안 자동 인증 완료</div>', unsafe_allow_html=True)
+    st.sidebar.caption("Streamlit Secrets를 통해 API Key가 안전하게 자동 적용되었으며, 보안을 위해 키 입력 폼이 숨김 처리되었습니다.")
+else:
+    # Fallback only if secrets are not configured yet
+    manual_key = st.sidebar.text_input("🔑 x-api-key (임시 입력)", type="password", help="Streamlit Secrets에 X_API_KEY가 설정되지 않은 경우 입력하세요.")
+    if manual_key:
+        api_key = manual_key.strip()
+    else:
+        st.warning("⚠️ Streamlit Secrets에 **X_API_KEY**를 설정하거나 키를 입력해 주세요.")
+        st.stop()
 
 def unwrap_response(data):
     if isinstance(data, dict) and "body" in data:
@@ -53,11 +101,11 @@ def normalize_url(url):
         return "https:" + url
     return url
 
-def fetch_info(ad_group_id, api_key):
+def fetch_info(ad_group_id, key):
     response = requests.get(
         API_ENDPOINT,
         params={"id": ad_group_id},
-        headers={"x-api-key": api_key},
+        headers={"x-api-key": key},
         timeout=15
     )
     if response.status_code == 403:
@@ -66,21 +114,11 @@ def fetch_info(ad_group_id, api_key):
     return unwrap_response(response.json())
 
 # ==========================================
-# 2. Header & Sidebar
+# 3. Header & Search Interface
 # ==========================================
 st.title("🟡 카카오모먼트 광고 소재 세팅값 조회 시스템")
 st.caption("광고그룹 ID를 입력하여 세팅값, 이미지, 문구를 조회하고 엑셀(.xlsx)로 다운로드하세요.")
 
-st.sidebar.header("⚙️ API Key 설정")
-api_key = st.sidebar.text_input("x-api-key 입력", type="password", help="제공받은 x-api-key를 입력하세요.")
-
-if not api_key:
-    st.warning("⚠️ 좌측 사이드바에서 **x-api-key**를 먼저 입력해 주세요.")
-    st.stop()
-
-# ==========================================
-# 3. Search Inputs
-# ==========================================
 tab1, tab2 = st.tabs(["🔍 단일 ID 조회", "📦 다중 ID 대량 조회"])
 
 data_results = []
