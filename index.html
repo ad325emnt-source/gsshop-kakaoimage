@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오모먼트 광고 소재 조회 시스템</title>
+    <meta name="description" content="카카오모먼트 API를 활용하여 광고 ID별 세팅값, 이미지, 문구를 조회하고 엑셀(.xlsx)로 다운로드하는 마케팅 자동화 툴">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- SheetJS CDN for Excel (.xlsx) Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        /* ==========================================================================
+           1. Design System & CSS Variables (Dark / Light Theme)
+           ========================================================================== */
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151c2c;
+            --card-border: #232d42;
+            --text-main: #f1f5f9;
+            --text-sub: #94a3b8;
+            --input-bg: #1e293b;
+            --input-border: #334155;
+            --kakao-yellow: #FEE500;
+            --kakao-yellow-hover: #ebd400;
+            --kakao-black: #191919;
+            --primary-blue: #3b82f6;
+            --primary-blue-hover: #2563eb;
+            --success-green: #10b981;
+            --success-green-hover: #059669;
+            --danger-red: #ef4444;
+            --table-header-bg: #1e293b;
+            --table-row-hover: #1e2b42;
+            --badge-legacy-bg: rgba(59, 130, 246, 0.2);
+            --badge-legacy-text: #60a5fa;
+            --badge-new-bg: rgba(254, 229, 0, 0.2);
+            --badge-new-text: #fee500;
+            --glass-bg: rgba(21, 28, 44, 0.85);
+            --modal-overlay: rgba(0, 0, 0, 0.75);
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        [data-theme="light"] {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --card-border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --input-bg: #f1f5f9;
+            --input-border: #cbd5e1;
+            --kakao-yellow: #FEE500;
+            --kakao-yellow-hover: #ebd400;
+            --kakao-black: #191919;
+            --primary-blue: #2563eb;
+            --primary-blue-hover: #1d4ed8;
+            --success-green: #059669;
+            --success-green-hover: #047857;
+            --danger-red: #dc2626;
+            --table-header-bg: #f1f5f9;
+            --table-row-hover: #f8fafc;
+            --badge-legacy-bg: rgba(37, 99, 235, 0.1);
+            --badge-legacy-text: #1d4ed8;
+            --badge-new-bg: rgba(234, 179, 8, 0.2);
+            --badge-new-text: #854d0e;
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --modal-overlay: rgba(15, 23, 42, 0.6);
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 24px 16px;
+            line-height: 1.5;
+        }
+
+        .app-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--kakao-yellow);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(254, 229, 0, 0.3);
+        }
+
+        .brand-title h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: var(--primary-blue);
+            color: #ffffff;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-yellow {
+            background-color: var(--kakao-yellow);
+            color: var(--kakao-black);
+            font-weight: 700;
+        }
+        .btn-yellow:hover:not(:disabled) {
+            background-color: var(--kakao-yellow-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(254, 229, 0, 0.3);
+        }
+
+        .btn-excel {
+            background-color: var(--success-green);
+            color: #ffffff;
+        }
+        .btn-excel:hover:not(:disabled) {
+            background-color: var(--success-green-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--input-border);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--primary-blue);
+            color: var(--primary-blue);
+        }
+
+        .btn-theme {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        /* Cards & Panels */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Tabs */
+        .tab-menu {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 12px;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-sub);
+            font-weight: 600;
+            font-size: 0.95rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .tab-btn.active {
+            background: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--card-border);
+        }
+
+        /* Forms & Inputs */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-control {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 10px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .input-control:focus {
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        textarea.input-control {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Sample Chips */
+        .sample-chips {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .chip {
+            padding: 4px 10px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 20px;
+            color: var(--text-main);
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .chip:hover {
+            border-color: var(--kakao-yellow);
+            color: var(--kakao-yellow);
+        }
+
+        /* Alert Banners */
+        .alert-banner {
+            padding: 14px 18px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .alert-close {
+            background: none;
+            border: none;
+            color: currentColor;
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        /* Table Styling */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.88rem;
+        }
+
+        .data-table th {
+            background: var(--table-header-bg);
+            color: var(--text-sub);
+            font-weight: 700;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--card-border);
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--card-border);
+            color: var(--text-main);
+            vertical-align: middle;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--table-row-hover);
+        }
+
+        .table-thumb {
+            width: 54px;
+            height: 54px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            cursor: pointer;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .badge-legacy {
+            background: var(--badge-legacy-bg);
+            color: var(--badge-legacy-text);
+        }
+        .badge-new {
+            background: var(--badge-new-bg);
+            color: var(--badge-new-text);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            border-top-color: var(--kakao-black);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: var(--modal-overlay);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 520px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .url-link {
+            color: var(--primary-blue);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .url-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Image Gallery */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .gallery-item {
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--input-bg);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="brand-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 5.58 2 10C2 12.87 3.84 15.37 6.64 16.76L5.6 20.61C5.46 21.13 6.01 21.56 6.47 21.27L11.08 18.35C11.38 18.38 11.69 18.4 12 18.4C17.52 18.4 22 14.82 22 10.4C22 5.98 17.52 2 12 2Z" fill="#191919"/>
+                    </svg>
+                </div>
+                <div class="brand-title">
+                    <h1>카카오모먼트 광고 소재 조회</h1>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="theme-toggle-btn" class="btn btn-secondary btn-theme">
+                    <span id="theme-icon">🌙</span> <span id="theme-label">다크 모드</span>
+                </button>
+                <button id="open-config-btn" class="btn btn-secondary btn-theme">
+                    ⚙️ API Key 설정
+                </button>
+            </div>
+        </header>
+
+        <!-- Alert Notification Banner -->
+        <div id="alert-banner" class="alert-banner alert-error" style="display: none;">
+            <span id="alert-text"></span>
+            <button class="alert-close" onclick="closeAlert()">&times;</button>
+        </div>
+
+        <!-- Input Section -->
+        <section class="card">
+            <div class="card-body">
+                <div class="tab-menu">
+                    <button class="tab-btn active" onclick="switchTab('single')">단일 ID 조회</button>
+                    <button class="tab-btn" onclick="switchTab('multi')">다중 ID 대량 조회</button>
+                </div>
+
+                <!-- Single Search Input -->
+                <div id="single-search-view">
+                    <div class="input-group">
+                        <input type="text" id="single-id-input" class="input-control" placeholder="광고그룹 ID 입력 (예: 4412053 또는 4475444)" autofocus>
+                        <button id="fetch-btn" class="btn btn-yellow" onclick="handleSingleFetch()">
+                            <span id="fetch-btn-text">세팅값 불러오기</span>
+                            <span id="fetch-spinner" class="spinner" style="display: none;"></span>
+                        </button>
+                    </div>
+                    <div class="sample-chips">
+                        <span>샘플 ID:</span>
+                        <span class="chip" onclick="setSample('4475444')">4475444</span>
+                        <span class="chip" onclick="setSample('4412053')">4412053</span>
+                        <span class="chip" onclick="setSample('msg-ad-1508656973746950144')">msg-ad-150865...</span>
+                    </div>
+                </div>
+
+                <!-- Multi Search Input -->
+                <div id="multi-search-view" style="display: none;">
+                    <div class="form-group">
+                        <textarea id="multi-id-input" class="input-control" rows="4" placeholder="광고그룹 ID들을 줄바꿈(Enter) 또는 쉼표(,)로 입력하세요&#10;예:&#10;4475444&#10;4412053"></textarea>
+                        <button id="multi-fetch-btn" class="btn btn-yellow" onclick="handleMultiFetch()" style="align-self: flex-start;">
+                            <span id="multi-btn-text">대량 세팅값 불러오기</span>
+                            <span id="multi-spinner" class="spinner" style="display: none;"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Result Section -->
+        <main id="result-section" class="card" style="display: none;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>📋 조회 결과 데이터</span>
+                    <span id="result-badge" class="badge"></span>
+                </div>
+                <button class="btn btn-excel" onclick="exportToExcel()">
+                    📊 엑셀(Excel) 다운로드 (.xlsx)
+                </button>
+            </div>
+            <div class="card-body">
+                <!-- Visualized Data Table -->
+                <div class="table-responsive">
+                    <table class="data-table" id="export-table">
+                        <thead>
+                            <tr>
+                                <th>creativeId</th>
+                                <th>name (소재명)</th>
+                                <th>adGroupId</th>
+                                <th>format</th>
+                                <th>config</th>
+                                <th>systemConfig</th>
+                                <th>statusDescription</th>
+                                <th>messageElement.id</th>
+                                <th>adAccountId</th>
+                                <th>profileId</th>
+                                <th>title (홍보타이틀)</th>
+                                <th>description (홍보문구)</th>
+                                <th>image.fileSize</th>
+                                <th>image.url</th>
+                                <th>image.fileName</th>
+                                <th>imageWidth</th>
+                                <th>imageHeight</th>
+                                <th>mimeType</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Preview Gallery -->
+                <div style="margin-top: 24px;">
+                    <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: var(--text-sub);">🖼️ 이미지 프리뷰 갤러리</h3>
+                    <div id="gallery-container" class="gallery-grid"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="config-modal" class="modal" style="display: none;">
+        <div class="modal-card">
+            <div class="card-header">
+                <div class="card-title">⚙️ API Key (x-api-key) 설정</div>
+                <button class="alert-close" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="card-body">
+                <p style="font-size: 0.88rem; color: var(--text-sub); margin-bottom: 14px;">
+                    카카오모먼트 API 조회를 위해 <code>x-api-key</code>를 입력해 주세요. Key는 브라우저 localStorage에 안전하게 저장됩니다.
+                </p>
+                <div class="form-group">
+                    <input type="password" id="api-key-modal-input" class="input-control" placeholder="x-api-key 입력">
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
+                        <button class="btn btn-secondary" onclick="closeConfigModal()">취소</button>
+                        <button class="btn btn-yellow" onclick="saveApiKeyModal()">설정 저장</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div id="image-modal" class="modal" style="display: none;" onclick="closeImageModal()">
+        <img id="zoom-img" style="max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: var(--shadow-lg);">
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const API_ENDPOINT = "https://cuyr21hbxd.execute-api.ap-northeast-2.amazonaws.com/prod/61258/moment-creative-info";
+        const STORAGE_KEY = "kakao_moment_x_api_key";
+        let fetchedDataList = [];
+
+        // 1. Initialization
+        document.addEventListener("DOMContentLoaded", () => {
+            initTheme();
+            const savedKey = localStorage.getItem(STORAGE_KEY);
+            if (!savedKey) {
+                openConfigModal();
+            }
+        });
+
+        // 2. Theme Switching
+        function initTheme() {
+            const savedTheme = localStorage.getItem("theme_mode") || "dark";
+            setTheme(savedTheme);
+        }
+
+        document.getElementById("theme-toggle-btn").addEventListener("click", () => {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const newTheme = currentTheme === "dark" ? "light" : "dark";
+            setTheme(newTheme);
+        });
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute("data-theme", theme);
+            localStorage.setItem("theme_mode", theme);
+            document.getElementById("theme-icon").textContent = theme === "dark" ? "🌙" : "☀️";
+            document.getElementById("theme-label").textContent = theme === "dark" ? "다크 모드" : "라이트 모드";
+        }
+
+        // 3. Tab Switching
+        function switchTab(mode) {
+            document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+            if (mode === "single") {
+                event.target.classList.add("active");
+                document.getElementById("single-search-view").style.display = "block";
+                document.getElementById("multi-search-view").style.display = "none";
+            } else {
+                event.target.classList.add("active");
+                document.getElementById("single-search-view").style.display = "none";
+                document.getElementById("multi-search-view").style.display = "block";
+            }
+        }
+
+        function setSample(id) {
+            document.getElementById("single-id-input").value = id;
+            handleSingleFetch();
+        }
+
+        // 4. Modal Functions
+        function openConfigModal() {
+            document.getElementById("api-key-modal-input").value = localStorage.getItem(STORAGE_KEY) || "";
+            document.getElementById("config-modal").style.display = "flex";
+        }
+
+        function closeConfigModal() {
+            document.getElementById("config-modal").style.display = "none";
+        }
+
+        function saveApiKeyModal() {
+            const val = document.getElementById("api-key-modal-input").value.trim();
+            if (!val) {
+                showAlert("API Key를 입력해 주세요.", "error");
+                return;
+            }
+            localStorage.setItem(STORAGE_KEY, val);
+            closeConfigModal();
+            showAlert("✓ API Key가 성공적으로 저장되었습니다.", "success");
+        }
+
+        document.getElementById("open-config-btn").addEventListener("click", openConfigModal);
+
+        // 5. Alert Notifications
+        function showAlert(msg, type = "error") {
+            const banner = document.getElementById("alert-banner");
+            const text = document.getElementById("alert-text");
+            banner.className = `alert-banner alert-${type}`;
+            text.innerHTML = msg;
+            banner.style.display = "flex";
+        }
+
+        function closeAlert() {
+            document.getElementById("alert-banner").style.display = "none";
+        }
+
+        // 6. API Fetch Logic with Local Proxy & Preflight Fallback
+        async function fetchCreativeInfo(id, apiKey) {
+            const targetUrl = `${API_ENDPOINT}?id=${encodeURIComponent(id)}`;
+            const isLocal = window.location.origin && (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1"));
+            
+            let urlsToTry = [];
+            if (isLocal) {
+                urlsToTry.push(`/api/info?id=${encodeURIComponent(id)}`);
+                urlsToTry.push(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                urlsToTry.push(targetUrl);
+            } else {
+                urlsToTry.push(targetUrl);
+                urlsToTry.push(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+            }
+
+            let lastErr = null;
+            for (const reqUrl of urlsToTry) {
+                try {
+                    const res = await fetch(reqUrl, {
+                        method: "GET",
+                        headers: { "x-api-key": apiKey }
+                    });
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        return json.body && typeof json.body === "string" ? JSON.parse(json.body) : (json.body || json);
+                    }
+
+                    if (res.status === 403) {
+                        if (reqUrl.startsWith("/api/info") || reqUrl.includes("corsproxy.io")) {
+                            throw new Error("API Key가 없거나 잘못되었습니다 (403 Forbidden). API Key 설정을 확인해 주세요.");
+                        }
+                        lastErr = new Error("CORS 사전검사 403 차단 발생");
+                        continue;
+                    }
+
+                    throw new Error(`API 오류 (Status ${res.status})`);
+                } catch (e) {
+                    lastErr = e;
+                    if (e.message.includes("403 Forbidden")) throw e;
+                }
+            }
+            throw lastErr || new Error("API 호출 실패");
+        }
+
+        // 7. Single Fetch Handler
+        async function handleSingleFetch() {
+            closeAlert();
+            const id = document.getElementById("single-id-input").value.trim();
+            const apiKey = localStorage.getItem(STORAGE_KEY);
+
+            if (!id) return showAlert("광고그룹 ID를 입력해 주세요.");
+            if (!apiKey) {
+                openConfigModal();
+                return showAlert("API Key를 먼저 설정해 주세요.");
+            }
+
+            setLoading(true, "single");
+            try {
+                const data = await fetchCreativeInfo(id, apiKey);
+                fetchedDataList = [data];
+                renderResults(fetchedDataList);
+                showAlert("✓ 세팅값 조회가 완료되었습니다.", "success");
+            } catch (err) {
+                showAlert(err.message || "데이터 조회 중 오류가 발생했습니다.");
+            } finally {
+                setLoading(false, "single");
+            }
+        }
+
+        // 8. Multi Batch Fetch Handler
+        async function handleMultiFetch() {
+            closeAlert();
+            const raw = document.getElementById("multi-id-input").value.trim();
+            const apiKey = localStorage.getItem(STORAGE_KEY);
+
+            if (!raw) return showAlert("대량 조회할 ID 목록을 입력해 주세요.");
+            if (!apiKey) {
+                openConfigModal();
+                return showAlert("API Key를 먼저 설정해 주세요.");
+            }
+
+            const idList = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            if (idList.length === 0) return showAlert("올바른 ID가 입력되지 않았습니다.");
+
+            setLoading(true, "multi");
+            fetchedDataList = [];
+
+            try {
+                for (const id of idList) {
+                    try {
+                        const data = await fetchCreativeInfo(id, apiKey);
+                        fetchedDataList.push(data);
+                    } catch (e) {
+                        console.warn(`ID ${id} fetch error:`, e);
+                    }
+                }
+
+                if (fetchedDataList.length === 0) {
+                    throw new Error("입력하신 모든 ID의 조회가 실패했습니다.");
+                }
+
+                renderResults(fetchedDataList);
+                showAlert(`✓ 총 ${fetchedDataList.length}건의 세팅값 조회가 완료되었습니다.`, "success");
+            } catch (err) {
+                showAlert(err.message || "대량 데이터 조회 중 오류가 발생했습니다.");
+            } finally {
+                setLoading(false, "multi");
+            }
+        }
+
+        function setLoading(loading, type) {
+            if (type === "single") {
+                document.getElementById("fetch-spinner").style.display = loading ? "inline-block" : "none";
+                document.getElementById("fetch-btn").disabled = loading;
+            } else {
+                document.getElementById("multi-spinner").style.display = loading ? "inline-block" : "none";
+                document.getElementById("multi-fetch-btn").disabled = loading;
+            }
+        }
+
+        // 9. Table & Visualizer Rendering
+        function normalizeUrl(url) {
+            if (!url) return "";
+            return url.startsWith("//") ? "https:" + url : url;
+        }
+
+        function renderResults(dataList) {
+            const tableBody = document.getElementById("table-body");
+            const galleryContainer = document.getElementById("gallery-container");
+            tableBody.innerHTML = "";
+            galleryContainer.innerHTML = "";
+
+            dataList.forEach((raw, idx) => {
+                const msg = raw.messageElement || {};
+                const img = msg.image || (raw.items && raw.items[0] && raw.items[0].image) || {};
+                const imgUrl = normalizeUrl(img.url || (raw.items && raw.items[0] && raw.items[0].imageUrl) || (raw.image_urls && raw.image_urls[0]));
+
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><strong>${raw.creativeId || msg.id || raw.messageAdId || "-"}</strong></td>
+                    <td>${escapeHtml(raw.name || msg.name || "-")}</td>
+                    <td>${raw.adGroupId || "-"}</td>
+                    <td><span class="badge ${raw.adGroupId ? 'badge-legacy' : 'badge-new'}">${raw.format || msg.creativeFormat || raw.type || "-"}</span></td>
+                    <td>${raw.config || "-"}</td>
+                    <td>${raw.systemConfig || "-"}</td>
+                    <td>${raw.statusDescription || "-"}</td>
+                    <td>${msg.id || "-"}</td>
+                    <td>${msg.adAccountId || "-"}</td>
+                    <td>${msg.profileId || "-"}</td>
+                    <td><strong>${escapeHtml(msg.title || "-")}</strong></td>
+                    <td>${escapeHtml(msg.description || raw.description || "-")}</td>
+                    <td>${img.fileSize ? Number(img.fileSize).toLocaleString() + ' B' : "-"}</td>
+                    <td>${imgUrl ? `<a href="${imgUrl}" target="_blank" class="url-link">${imgUrl.substring(0, 30)}...</a>` : "-"}</td>
+                    <td>${escapeHtml(img.fileName || "-")}</td>
+                    <td>${img.imageWidth || "-"}</td>
+                    <td>${img.imageHeight || "-"}</td>
+                    <td>${img.mimeType || "-"}</td>
+                `;
+                tableBody.appendChild(tr);
+
+                // Add to gallery preview if image URL exists
+                if (imgUrl) {
+                    const gItem = document.createElement("div");
+                    gItem.className = "gallery-item";
+                    gItem.innerHTML = `
+                        <img src="${imgUrl}" onclick="zoomImage('${imgUrl}')" alt="Preview Image ${idx + 1}">
+                        <div style="padding: 8px; font-size: 0.78rem; color: var(--text-sub); text-align: center;">
+                            #${idx + 1} ${escapeHtml(raw.name || msg.name || '이미지')}
+                        </div>
+                    `;
+                    galleryContainer.appendChild(gItem);
+                }
+            });
+
+            document.getElementById("result-section").style.display = "block";
+            document.getElementById("result-section").scrollIntoView({ behavior: "smooth" });
+        }
+
+        // 10. SheetJS Excel Export (.xlsx)
+        function exportToExcel() {
+            if (!fetchedDataList || fetchedDataList.length === 0) {
+                showAlert("다운로드할 결과 데이터가 없습니다.");
+                return;
+            }
+
+            const summaryRows = fetchedDataList.map(raw => {
+                const msg = raw.messageElement || {};
+                const img = msg.image || (raw.items && raw.items[0] && raw.items[0].image) || {};
+                const imgUrl = normalizeUrl(img.url || (raw.items && raw.items[0] && raw.items[0].imageUrl) || (raw.image_urls && raw.image_urls[0]));
+
+                return {
+                    "creativeId": raw.creativeId || msg.id || raw.messageAdId || "",
+                    "name": raw.name || msg.name || "",
+                    "adGroupId": raw.adGroupId || "",
+                    "format": raw.format || msg.creativeFormat || raw.type || "",
+                    "config": raw.config || "",
+                    "systemConfig": raw.systemConfig || "",
+                    "statusDescription": raw.statusDescription || "",
+                    "messageElement.id": msg.id || "",
+                    "adAccountId": msg.adAccountId || "",
+                    "profileId": msg.profileId || "",
+                    "title": msg.title || "",
+                    "description": msg.description || raw.description || "",
+                    "fileSize": img.fileSize || "",
+                    "url": imgUrl || "",
+                    "fileName": img.fileName || "",
+                    "imageWidth": img.imageWidth || "",
+                    "imageHeight": img.imageHeight || "",
+                    "mimeType": img.mimeType || ""
+                };
+            });
+
+            const itemRows = [];
+            fetchedDataList.forEach(raw => {
+                const msg = raw.messageElement || {};
+                const items = msg.itemAssetGroups || raw.items || [];
+                items.forEach(item => {
+                    const itemImg = item.image ? normalizeUrl(item.image.url) : normalizeUrl(item.imageUrl || item.image_url);
+                    itemRows.push({
+                        "adGroupId": raw.adGroupId || "",
+                        "creativeId": raw.creativeId || msg.id || raw.messageAdId || "",
+                        "name": raw.name || msg.name || "",
+                        "ordering": item.ordering ?? "",
+                        "title": item.title || "",
+                        "priceAmount": item.priceAmount || item.price_amount || "",
+                        "discountedPriceAmount": item.discountedPriceAmount || item.discounted_price_amount || "",
+                        "currency": item.priceCurrencyCode || item.currency || "",
+                        "mobileLandingUrl": item.mobileLandingUrl || item.landing_url || "",
+                        "imageUrl": itemImg || ""
+                    });
+                });
+            });
+
+            const workbook = XLSX.utils.book_new();
+
+            const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+            wsSummary['!cols'] = Object.keys(summaryRows[0]).map(key => ({ wch: Math.max(key.length + 4, 14) }));
+            XLSX.utils.book_append_sheet(workbook, wsSummary, "소재_기본정보");
+
+            if (itemRows.length > 0) {
+                const wsItems = XLSX.utils.json_to_sheet(itemRows);
+                wsItems['!cols'] = Object.keys(itemRows[0]).map(key => ({ wch: Math.max(key.length + 4, 14) }));
+                XLSX.utils.book_append_sheet(workbook, wsItems, "상품_카드_상세목록");
+            }
+
+            const timestamp = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(workbook, `카카오모먼트_광고소재_세팅정보_${timestamp}.xlsx`);
+        }
+
+        // 11. Image Zoom
+        function zoomImage(url) {
+            document.getElementById("zoom-img").src = url;
+            document.getElementById("image-modal").style.display = "flex";
+        }
+        function closeImageModal() {
+            document.getElementById("image-modal").style.display = "none";
+        }
+
+        function escapeHtml(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+    </script>
+</body>
+</html>
