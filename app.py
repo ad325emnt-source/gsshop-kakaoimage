@@ -49,38 +49,42 @@ API_ENDPOINT = "https://cuyr21hbxd.execute-api.ap-northeast-2.amazonaws.com/prod
 # ==========================================
 # 2. Automated Secrets & Key Security Logic
 # ==========================================
-def get_api_key():
-    # 1. Check Streamlit Secrets (st.secrets["X_API_KEY"] or st.secrets["x_api_key"])
+def get_secret_api_key():
+    val = None
     try:
         if "X_API_KEY" in st.secrets:
-            return st.secrets["X_API_KEY"]
-        if "x_api_key" in st.secrets:
-            return st.secrets["x_api_key"]
+            val = st.secrets["X_API_KEY"]
+        elif "x_api_key" in st.secrets:
+            val = st.secrets["x_api_key"]
     except Exception:
         pass
     
-    # 2. Check Environment Variables
-    env_key = os.getenv("X_API_KEY") or os.getenv("x_api_key")
-    if env_key:
-        return env_key
+    if not val:
+        val = os.getenv("X_API_KEY") or os.getenv("x_api_key")
     
+    if val:
+        return str(val).strip().strip('"').strip("'")
     return None
 
-api_key = get_api_key()
+secret_key = get_secret_api_key()
 
-# Sidebar Config
 st.sidebar.header("⚙️ 보안 및 인증 설정")
 
-if api_key:
-    st.sidebar.markdown('<div class="sec-badge">🔒 API Key 보안 자동 인증 완료</div>', unsafe_allow_html=True)
-    st.sidebar.caption("Streamlit Secrets를 통해 API Key가 안전하게 자동 적용되었으며, 보안을 위해 키 입력 폼이 숨김 처리되었습니다.")
+# Allow manual override if secrets key is wrong or needs changing
+if secret_key:
+    st.sidebar.markdown('<div class="sec-badge">🔒 Streamlit Secrets 자동 연결됨</div>', unsafe_allow_html=True)
+    with st.sidebar.expander("🔑 API Key 재설정 / 재확인"):
+        override_key = st.text_input("x-api-key 직접 입력", value="", type="password", help="Secrets 키가 올바르지 않은 경우 여기에 입력하세요.")
+        if override_key.strip():
+            api_key = override_key.strip()
+        else:
+            api_key = secret_key
 else:
-    # Fallback only if secrets are not configured yet
-    manual_key = st.sidebar.text_input("🔑 x-api-key (임시 입력)", type="password", help="Streamlit Secrets에 X_API_KEY가 설정되지 않은 경우 입력하세요.")
-    if manual_key:
+    manual_key = st.sidebar.text_input("🔑 x-api-key 입력", type="password", help="Streamlit Secrets에 X_API_KEY가 설정되지 않은 경우 입력해 주세요.")
+    if manual_key.strip():
         api_key = manual_key.strip()
     else:
-        st.warning("⚠️ Streamlit Secrets에 **X_API_KEY**를 설정하거나 키를 입력해 주세요.")
+        st.warning("⚠️ **x-api-key**를 설정해 주세요. (Streamlit Cloud Settings -> Secrets 또는 사이드바 입력)")
         st.stop()
 
 def unwrap_response(data):
@@ -102,6 +106,9 @@ def normalize_url(url):
     return url
 
 def fetch_info(ad_group_id, key):
+    if not key:
+        raise ValueError("API Key가 설정되지 않았습니다.")
+    
     response = requests.get(
         API_ENDPOINT,
         params={"id": ad_group_id},
@@ -109,7 +116,7 @@ def fetch_info(ad_group_id, key):
         timeout=15
     )
     if response.status_code == 403:
-        raise ValueError("API Key가 없거나 잘못되었습니다 (403 Forbidden).")
+        raise ValueError("API Key가 없거나 잘못되었습니다 (403 Forbidden). Secrets 또는 사이드바 키를 확인해 주세요.")
     response.raise_for_status()
     return unwrap_response(response.json())
 
