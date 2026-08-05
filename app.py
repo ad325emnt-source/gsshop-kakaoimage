@@ -4,6 +4,7 @@ import pandas as pd
 import io
 import json
 import os
+import re
 
 # ==========================================
 # 1. Streamlit Page Configuration & Theme
@@ -46,34 +47,40 @@ st.markdown("""
 
 API_ENDPOINT = "https://cuyr21hbxd.execute-api.ap-northeast-2.amazonaws.com/prod/61258/moment-creative-info"
 
-def mask_key(k):
+def clean_key_str(k):
     if not k:
+        return ""
+    # Strip quotes, whitespace, and invisible unicode characters (\u200b, \ufeff BOM, \u00a0 etc.)
+    s = str(k)
+    s = re.sub(r'[\r\n\t\u200b-\u200d\ufeff\u00a0]', '', s)
+    return s.strip().strip('"').strip("'")
+
+def mask_key(k):
+    cleaned = clean_key_str(k)
+    if not cleaned:
         return "미설정 (None)"
-    k_str = str(k).strip().strip('"').strip("'")
-    if len(k_str) <= 6:
-        return k_str[:2] + "*" * (len(k_str) - 2) + f" (길이: {len(k_str)}자)"
-    return k_str[:4] + "*" * (len(k_str) - 8) + k_str[-4:] + f" (총 {len(k_str)}자)"
+    if len(cleaned) <= 6:
+        return cleaned[:2] + "*" * (len(cleaned) - 2) + f" (길이: {len(cleaned)}자)"
+    return cleaned[:4] + "*" * (len(cleaned) - 8) + cleaned[-4:] + f" (총 {len(cleaned)}자)"
 
 # ==========================================
 # 2. Automated Secrets & Key Security Logic
 # ==========================================
 def get_secret_api_key():
     try:
-        # Search all keys in st.secrets case-insensitively (handles x-api-key, X-API-KEY, x_api_key, X_API_KEY, etc.)
         for k in st.secrets.keys():
             k_clean = k.lower().replace("-", "_")
             if k_clean in ["x_api_key", "api_key", "key"]:
                 val = st.secrets[k]
                 if val:
-                    return str(val).strip().strip('"').strip("'")
+                    return clean_key_str(val)
     except Exception:
         pass
     
-    # Also search environment variables
     for env_k, env_val in os.environ.items():
         if env_k.lower().replace("-", "_") in ["x_api_key", "api_key"]:
             if env_val:
-                return str(env_val).strip().strip('"').strip("'")
+                return clean_key_str(env_val)
                 
     return None
 
@@ -85,16 +92,16 @@ if secret_key:
     st.sidebar.markdown('<div class="sec-badge">🔒 Secrets 키 자동 연결 완료</div>', unsafe_allow_html=True)
     st.sidebar.caption(f"적용 중인 Key: `{mask_key(secret_key)}`")
     
-    override_key = st.sidebar.text_input("🔑 API Key 수동 입력 (테스트/변경용)", type="password", help="Postman에서 성공했던 실제 x-api-key를 입력하여 바로 테스트할 수 있습니다.")
+    override_key = st.sidebar.text_input("🔑 API Key 수동 입력 (테스트/변경용)", type="password", help="Postman에서 성공했던 실제 x-api-key를 붙여넣어 테스트해 보세요.")
     if override_key.strip():
-        api_key = override_key.strip()
+        api_key = clean_key_str(override_key)
         st.sidebar.info(f"수동 입력 키 적용 중 (`{mask_key(api_key)}`)")
     else:
         api_key = secret_key
 else:
     manual_key = st.sidebar.text_input("🔑 x-api-key 입력", type="password", help="Postman에서 사용한 x-api-key를 입력해 주세요.")
     if manual_key.strip():
-        api_key = manual_key.strip()
+        api_key = clean_key_str(manual_key)
     else:
         st.warning("⚠️ **x-api-key**를 입력해 주세요.")
         st.stop()
@@ -118,20 +125,19 @@ def normalize_url(url):
     return url
 
 def fetch_info(ad_group_id, key):
-    if not key:
+    clean_k = clean_key_str(key)
+    if not clean_k:
         raise ValueError("API Key가 설정되지 않았습니다.")
-    
-    clean_key = str(key).strip().strip('"').strip("'")
     
     response = requests.get(
         API_ENDPOINT,
-        params={"id": ad_group_id},
-        headers={"x-api-key": clean_key},
+        params={"id": str(ad_group_id).strip()},
+        headers={"x-api-key": clean_k},
         timeout=15
     )
     
     if response.status_code == 403:
-        raise ValueError(f"AWS API Gateway 403 거절: API Key가 유효하지 않습니다. (전송된 Key: {mask_key(clean_key)})")
+        raise ValueError(f"AWS API Gateway 403 거절: API Key가 유효하지 않습니다. (전송된 Key: {mask_key(clean_k)})")
     
     response.raise_for_status()
     return unwrap_response(response.json())
