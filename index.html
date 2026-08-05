@@ -725,19 +725,28 @@
             document.getElementById("alert-banner").style.display = "none";
         }
 
+        function cleanKey(k) {
+            if (!k) return "";
+            return String(k).replace(/[\r\n\t\u200b-\u200d\ufeff\u00a0]/g, "").trim().replace(/^["']|["']$/g, "");
+        }
+
         // 6. API Fetch Logic with Local Proxy & Preflight Fallback
         async function fetchCreativeInfo(id, apiKey) {
+            const cleanApiKey = cleanKey(apiKey);
+            if (!cleanApiKey) {
+                throw new Error("API Key가 설정되지 않았습니다. [API Key 설정] 버튼을 클릭해 x-api-key를 저장해 주세요.");
+            }
+
             const targetUrl = `${API_ENDPOINT}?id=${encodeURIComponent(id)}`;
             const isLocal = window.location.origin && (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1"));
             
             let urlsToTry = [];
             if (isLocal) {
                 urlsToTry.push(`/api/info?id=${encodeURIComponent(id)}`);
-                urlsToTry.push(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
                 urlsToTry.push(targetUrl);
             } else {
                 urlsToTry.push(targetUrl);
-                urlsToTry.push(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                urlsToTry.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`);
             }
 
             let lastErr = null;
@@ -745,7 +754,7 @@
                 try {
                     const res = await fetch(reqUrl, {
                         method: "GET",
-                        headers: { "x-api-key": apiKey }
+                        headers: { "x-api-key": cleanApiKey }
                     });
 
                     if (res.ok) {
@@ -754,20 +763,21 @@
                     }
 
                     if (res.status === 403) {
-                        if (reqUrl.startsWith("/api/info") || reqUrl.includes("corsproxy.io")) {
-                            throw new Error("API Key가 없거나 잘못되었습니다 (403 Forbidden). API Key 설정을 확인해 주세요.");
+                        if (reqUrl.startsWith("/api/info")) {
+                            throw new Error("API Key가 없거나 잘못되었습니다 (403 Forbidden). 올바른 x-api-key인지 확인해 주세요.");
                         }
-                        lastErr = new Error("CORS 사전검사 403 차단 발생");
+                        lastErr = new Error("CORS 사전검사 또는 API Key 403 거절");
                         continue;
                     }
 
                     throw new Error(`API 오류 (Status ${res.status})`);
                 } catch (e) {
                     lastErr = e;
-                    if (e.message.includes("403 Forbidden")) throw e;
+                    if (e.message.includes("API Key가 없거나 잘못되었습니다")) throw e;
                 }
             }
-            throw lastErr || new Error("API 호출 실패");
+            
+            throw new Error(`API 호출 실패: 브라우저 CORS 제약 또는 API Key 오류입니다. 폴더 내 start_server.bat를 실행하여 http://localhost:8080 에서 접속하시거나 API Key를 재확인해 주세요.`);
         }
 
         // 7. Single Fetch Handler
