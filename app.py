@@ -58,20 +58,23 @@ def mask_key(k):
 # 2. Automated Secrets & Key Security Logic
 # ==========================================
 def get_secret_api_key():
-    val = None
     try:
-        if "X_API_KEY" in st.secrets:
-            val = st.secrets["X_API_KEY"]
-        elif "x_api_key" in st.secrets:
-            val = st.secrets["x_api_key"]
+        # Search all keys in st.secrets case-insensitively (handles x-api-key, X-API-KEY, x_api_key, X_API_KEY, etc.)
+        for k in st.secrets.keys():
+            k_clean = k.lower().replace("-", "_")
+            if k_clean in ["x_api_key", "api_key", "key"]:
+                val = st.secrets[k]
+                if val:
+                    return str(val).strip().strip('"').strip("'")
     except Exception:
         pass
     
-    if not val:
-        val = os.getenv("X_API_KEY") or os.getenv("x_api_key")
-    
-    if val:
-        return str(val).strip().strip('"').strip("'")
+    # Also search environment variables
+    for env_k, env_val in os.environ.items():
+        if env_k.lower().replace("-", "_") in ["x_api_key", "api_key"]:
+            if env_val:
+                return str(env_val).strip().strip('"').strip("'")
+                
     return None
 
 secret_key = get_secret_api_key()
