@@ -129,15 +129,24 @@ def fetch_info(ad_group_id, key):
     if not clean_k:
         raise ValueError("API Key가 설정되지 않았습니다.")
     
+    headers = {
+        "x-api-key": clean_k,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+    }
+    
     response = requests.get(
         API_ENDPOINT,
         params={"id": str(ad_group_id).strip()},
-        headers={"x-api-key": clean_k},
+        headers=headers,
         timeout=15
     )
     
     if response.status_code == 403:
-        raise ValueError(f"AWS API Gateway 403 거절: API Key가 유효하지 않습니다. (전송된 Key: {mask_key(clean_k)})")
+        raise ValueError(f"AWS API Gateway 403 거절: API Key가 유효하지 않거나 차단되었습니다. (전송된 Key: {mask_key(clean_k)})")
     
     response.raise_for_status()
     return unwrap_response(response.json())
