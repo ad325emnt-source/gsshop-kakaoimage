@@ -39,12 +39,20 @@ st.markdown("""
         border: 1px solid rgba(16, 185, 129, 0.3);
         font-size: 0.85rem;
         font-weight: bold;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
 
 API_ENDPOINT = "https://cuyr21hbxd.execute-api.ap-northeast-2.amazonaws.com/prod/61258/moment-creative-info"
+
+def mask_key(k):
+    if not k:
+        return "미설정 (None)"
+    k_str = str(k).strip().strip('"').strip("'")
+    if len(k_str) <= 6:
+        return k_str[:2] + "*" * (len(k_str) - 2) + f" (길이: {len(k_str)}자)"
+    return k_str[:4] + "*" * (len(k_str) - 8) + k_str[-4:] + f" (총 {len(k_str)}자)"
 
 # ==========================================
 # 2. Automated Secrets & Key Security Logic
@@ -70,21 +78,22 @@ secret_key = get_secret_api_key()
 
 st.sidebar.header("⚙️ 보안 및 인증 설정")
 
-# Allow manual override if secrets key is wrong or needs changing
 if secret_key:
-    st.sidebar.markdown('<div class="sec-badge">🔒 Streamlit Secrets 자동 연결됨</div>', unsafe_allow_html=True)
-    with st.sidebar.expander("🔑 API Key 재설정 / 재확인"):
-        override_key = st.text_input("x-api-key 직접 입력", value="", type="password", help="Secrets 키가 올바르지 않은 경우 여기에 입력하세요.")
-        if override_key.strip():
-            api_key = override_key.strip()
-        else:
-            api_key = secret_key
+    st.sidebar.markdown('<div class="sec-badge">🔒 Secrets 키 자동 연결 완료</div>', unsafe_allow_html=True)
+    st.sidebar.caption(f"적용 중인 Key: `{mask_key(secret_key)}`")
+    
+    override_key = st.sidebar.text_input("🔑 API Key 수동 입력 (테스트/변경용)", type="password", help="Postman에서 성공했던 실제 x-api-key를 입력하여 바로 테스트할 수 있습니다.")
+    if override_key.strip():
+        api_key = override_key.strip()
+        st.sidebar.info(f"수동 입력 키 적용 중 (`{mask_key(api_key)}`)")
+    else:
+        api_key = secret_key
 else:
-    manual_key = st.sidebar.text_input("🔑 x-api-key 입력", type="password", help="Streamlit Secrets에 X_API_KEY가 설정되지 않은 경우 입력해 주세요.")
+    manual_key = st.sidebar.text_input("🔑 x-api-key 입력", type="password", help="Postman에서 사용한 x-api-key를 입력해 주세요.")
     if manual_key.strip():
         api_key = manual_key.strip()
     else:
-        st.warning("⚠️ **x-api-key**를 설정해 주세요. (Streamlit Cloud Settings -> Secrets 또는 사이드바 입력)")
+        st.warning("⚠️ **x-api-key**를 입력해 주세요.")
         st.stop()
 
 def unwrap_response(data):
@@ -109,14 +118,18 @@ def fetch_info(ad_group_id, key):
     if not key:
         raise ValueError("API Key가 설정되지 않았습니다.")
     
+    clean_key = str(key).strip().strip('"').strip("'")
+    
     response = requests.get(
         API_ENDPOINT,
         params={"id": ad_group_id},
-        headers={"x-api-key": key},
+        headers={"x-api-key": clean_key},
         timeout=15
     )
+    
     if response.status_code == 403:
-        raise ValueError("API Key가 없거나 잘못되었습니다 (403 Forbidden). Secrets 또는 사이드바 키를 확인해 주세요.")
+        raise ValueError(f"AWS API Gateway 403 거절: API Key가 유효하지 않습니다. (전송된 Key: {mask_key(clean_key)})")
+    
     response.raise_for_status()
     return unwrap_response(response.json())
 
